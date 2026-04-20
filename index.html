@@ -316,4 +316,139 @@ const lessonData = [
     sentenceHtml:`${shu('ありたちは')}\n「かえるの よこづなだ」と\n${jutsu('いいました')}。`,
     supportHtml:`${shu('ありたちは')}\n「かえるの よこづなだ」と\n${jutsu('いいました')}。`,
     vocab:[
-      {jpHtml:`よこづな`,jaSpeak:"よこづな",emoji:
+      {jpHtml:`よこづな`,jaSpeak:"よこづな",emoji:"🏆",pt:"yokozuna (campeão do sumô)",ptSpeak:"yokozuna, campeão do sumô",pt_kana:"ヨコズナ（スモーのチャンピオン）",fil:"yokozuna (kampeon ng sumo)",filSpeak:"yokozuna, kampeon ng sumo",fil_kana:"ヨコズナ（スモーのチャンピオン）"},
+      {jpHtml:`いいました`,jaSpeak:"いいました",emoji:null,pt:"disseram",ptSpeak:"disseram",pt_kana:"ジッセラン",fil:"sinabi nila",filSpeak:"sinabi nila",fil_kana:"シナビ ニラ"}
+    ]
+  },
+  {
+    sentenceSpeak:"ありたちは はっぱの うえで はねて てを たたきました。",
+    sentenceHtml:`${shu('ありたちは')} ${rb('葉','は')}っぱの ${rb('上','うえ')}で はねて ${rb('手','て')}を ${jutsu('たたきました')}。`,
+    supportHtml:`${shu('ありたちは')} ${rb('葉','は')}っぱの ${rb('上','うえ')}で はねて ${rb('手','て')}を ${jutsu('たたきました')}。`,
+    vocab:[
+      {jpHtml:`${rb('葉','は')}っぱの ${rb('上','うえ')}で はねて`,jaSpeak:"はっぱのうえではねて",emoji:"🍃",pt:"pulando em cima da folha",ptSpeak:"pulando em cima da folha",pt_kana:"プランドゥ エン シーマ ダ フォーリャ",fil:"tumalon sa ibabaw ng dahon",filSpeak:"tumalon sa ibabaw ng dahon",fil_kana:"トゥマロン サ イバボウ ナン ダホン"},
+      {jpHtml:`${rb('手','て')}を たたきました`,jaSpeak:"てをたたきました",emoji:"👏",pt:"bateram palmas",ptSpeak:"bateram palmas",pt_kana:"バテラン パルマス",fil:"pumalakpak",filSpeak:"pumalakpak",fil_kana:"プマラクパック"}
+    ]
+  }
+];
+
+function stopSpeech(){
+  if(currentAudio){currentAudio.pause();currentAudio.currentTime=0;currentAudio=null;}
+  speechSynthesis.cancel();
+}
+function findVoice(tests){
+  const vv=speechSynthesis.getVoices();
+  for(const t of tests){const f=vv.find(t);if(f)return f;}
+  return null;
+}
+function normalizeJa(t){
+  return t
+    .replace(/・/g,'、')
+    .replace(/プップ/g,'プッ プ')
+    .replace(/パッパラピー/g,'パッ パラ ピー')
+    .replace(/パッパ/g,'パッ パ')
+    .replace(/ブウー/g,'ブー ウー')
+    .replace(/どっすん/g,'どっ すん')
+    .replace(/パオーン/g,'パ オーン');
+}
+function speakTTS(text,lang,onEnd){
+  const u=new SpeechSynthesisUtterance();
+  u.lang=lang;u.volume=1;u.pitch=1;
+  if(lang==='ja-JP'){
+    u.text=normalizeJa(text);u.rate=0.45;
+    u.voice=findVoice([v=>/^ja[-_]?JP$/i.test(v.lang)&&/Google/i.test(v.name),v=>/^ja[-_]?JP$/i.test(v.lang),v=>/^ja/i.test(v.lang)]);
+  }else if(lang==='pt-BR'){
+    u.text=text;u.rate=0.42;
+    u.voice=findVoice([v=>/^pt[-_]?BR$/i.test(v.lang)&&/Google/i.test(v.name),v=>/^pt[-_]?BR$/i.test(v.lang),v=>/^pt/i.test(v.lang)]);
+  }else{
+    u.text=text;u.rate=0.44;
+    u.voice=findVoice([v=>/^fil/i.test(v.lang),v=>/Filipino/i.test(v.name),v=>/^tl/i.test(v.lang),v=>/Tagalog/i.test(v.name)]);
+  }
+  if(onEnd)u.onend=onEnd;
+  speechSynthesis.speak(u);
+}
+function playMP3(path,onEnd){
+  stopSpeech();
+  const a=new Audio(path);
+  currentAudio=a;
+  a.onended=()=>{currentAudio=null;if(onEnd)onEnd();};
+  a.play().catch(()=>{currentAudio=null;});
+}
+function playCurrentSentence(){
+  stopSpeech();
+  const idx=selectedIndex;
+  if(mp3Store[idx]===true){playMP3(audioPath(idx));}
+  else{speakTTS(lessonData[idx].sentenceSpeak,'ja-JP');}
+}
+function speakVocab(v,cardEl){
+  stopSpeech();
+  if(cardEl)cardEl.classList.add('playing');
+  const restore=()=>{if(cardEl)cardEl.classList.remove('playing');};
+  const foreignLang=currentLang==='pt'?'pt-BR':'fil-PH';
+  const foreignText=currentLang==='pt'?v.ptSpeak:v.filSpeak;
+  speakTTS(v.jaSpeak,'ja-JP',()=>{
+    setTimeout(()=>{speakTTS(foreignText,foreignLang,()=>{setTimeout(restore,200);});},500);
+  });
+}
+function buildColumns(){
+  const container=document.getElementById('columns');
+  container.innerHTML='';
+  lessonData.forEach((d,i)=>{
+    const col=document.createElement('div');
+    col.className='col'+(i===selectedIndex?' active':'')+(mp3Store[i]?' has-audio':'');
+    col.innerHTML=`<div class="sentence">${d.sentenceHtml}</div>`;
+    col.addEventListener('click',()=>selectSentence(i));
+    container.appendChild(col);
+  });
+}
+function buildMp3Row(){
+  const row=document.getElementById('mp3Row');
+  const idx=selectedIndex;
+  const fname=audioPath(idx);
+  if(mp3Store[idx]===true){
+    row.innerHTML=`<span class="mp3-status">♪ ${fname} を読み込み中</span>`;
+  }else if(mp3Store[idx]===false){
+    row.innerHTML=`<span class="mp3-label">${fname} が見つかりません（TTSで読みます）</span>`;
+  }else{
+    row.innerHTML=`<span class="mp3-label">確認中…（${fname}）</span>`;
+  }
+}
+function buildSupport(){
+  const d=lessonData[selectedIndex];
+  document.getElementById('selectedSentence').innerHTML=d.supportHtml;
+  buildMp3Row();
+  const area=document.getElementById('vocabArea');
+  area.innerHTML='';
+  d.vocab.forEach(v=>{
+    const card=document.createElement('div');
+    card.className='vocab-card';
+    const hasEmoji=v.emoji!=null;
+    const transText=currentLang==='pt'?v.pt:v.fil;
+    const kanaText=currentLang==='pt'?v.pt_kana:v.fil_kana;
+    card.innerHTML=`
+      ${hasEmoji?`<div class="vocab-emoji">${v.emoji}</div>`:''}
+      <div class="vocab-jp">${v.jpHtml}</div>
+      <div class="vocab-trans">${transText}</div>
+      <div class="vocab-kana">${kanaText}</div>
+    `;
+    card.addEventListener('click',()=>speakVocab(v,card));
+    area.appendChild(card);
+  });
+}
+function selectSentence(i){
+  selectedIndex=i;
+  document.querySelectorAll('.col').forEach((c,idx)=>c.classList.toggle('active',idx===i));
+  buildSupport();
+}
+function toggleLanguage(){
+  currentLang=currentLang==='pt'?'fil':'pt';
+  document.getElementById('langBtn').textContent=currentLang==='pt'?'ポルトガル語':'フィリピノ語';
+  buildSupport();
+}
+speechSynthesis.getVoices();
+speechSynthesis.onvoiceschanged=()=>{speechSynthesis.getVoices();};
+buildColumns();
+buildSupport();
+checkAllAudio();
+</script>
+</body>
+</html>
